@@ -8,3 +8,41 @@ body {
   margin: auto;
   padding: 1em;
 }
+
+header {
+  display: flex;
+  gap: 1em;
+  align-items: baseline;
+}
+
+header label {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 0.5em;
+  flex-wrap: wrap;
+}
+
+header input[type="range"] {
+  flex: 1;
+  min-width: 200px;
+}
+
+header .time-display-container {
+  display: flex;
+  align-items: center;
+  min-width: 100px;
+  flex-basis: 100%;
+  margin-top: 0.25em;
+}
+
+header time,
+header em {
+  display: block;
+  line-height: 1.2;
+}
+
+header em {
+  color: #666;
+  font-style: italic;
+}

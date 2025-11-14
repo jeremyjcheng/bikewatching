@@ -34,6 +34,60 @@ function getCoords(station) {
   return { cx: x, cy: y }; // Return as object for use in SVG attributes
 }
 
+// Helper function to format time
+function formatTime(minutes) {
+  const date = new Date(0, 0, 0, 0, minutes); // Set hours & minutes
+  return date.toLocaleString("en-US", { timeStyle: "short" }); // Format as HH:MM AM/PM
+}
+
+// Helper function to get minutes since midnight
+function minutesSinceMidnight(date) {
+  return date.getHours() * 60 + date.getMinutes();
+}
+
+// Function to compute station traffic
+function computeStationTraffic(stations, trips) {
+  // Compute departures
+  const departures = d3.rollup(
+    trips,
+    (v) => v.length,
+    (d) => d.start_station_id
+  );
+
+  // Compute arrivals
+  const arrivals = d3.rollup(
+    trips,
+    (v) => v.length,
+    (d) => d.end_station_id
+  );
+
+  // Update each station
+  return stations.map((station) => {
+    let id = station.short_name;
+    station.arrivals = arrivals.get(id) ?? 0;
+    station.departures = departures.get(id) ?? 0;
+    station.totalTraffic = station.arrivals + station.departures;
+    return station;
+  });
+}
+
+// Function to filter trips by time
+function filterTripsbyTime(trips, timeFilter) {
+  return timeFilter === -1
+    ? trips // If no filter is applied (-1), return all trips
+    : trips.filter((trip) => {
+        // Convert trip start and end times to minutes since midnight
+        const startedMinutes = minutesSinceMidnight(trip.started_at);
+        const endedMinutes = minutesSinceMidnight(trip.ended_at);
+
+        // Include trips that started or ended within 60 minutes of the selected time
+        return (
+          Math.abs(startedMinutes - timeFilter) <= 60 ||
+          Math.abs(endedMinutes - timeFilter) <= 60
+        );
+      });
+}
+
 map.on("load", async () => {
   map.addSource("boston_route", {
     type: "geojson",
@@ -80,47 +134,31 @@ map.on("load", async () => {
     console.log("Loaded JSON Data:", jsonData); // Log to verify structure
 
     // Access the nested stations array
-    let stations = jsonData.data.stations;
-    console.log("Stations Array:", stations);
+    const allStations = jsonData.data.stations;
+    console.log("Stations Array:", allStations);
 
-    // Fetch and parse traffic data
-    const trips = await d3.csv(TRAFFIC_CSV_URL);
+    // Fetch and parse traffic data with date parsing
+    const trips = await d3.csv(TRAFFIC_CSV_URL, (trip) => {
+      trip.started_at = new Date(trip.started_at);
+      trip.ended_at = new Date(trip.ended_at);
+      return trip;
+    });
     console.log("Loaded Traffic Data:", trips);
 
-    // Calculate departures and arrivals
-    const departures = d3.rollup(
-      trips,
-      (v) => v.length,
-      (d) => d.start_station_id
-    );
-
-    const arrivals = d3.rollup(
-      trips,
-      (v) => v.length,
-      (d) => d.end_station_id
-    );
-
-    // Add traffic properties to each station
-    stations = stations.map((station) => {
-      let id = station.short_name;
-      station.arrivals = arrivals.get(id) ?? 0;
-      station.departures = departures.get(id) ?? 0;
-      station.totalTraffic = station.arrivals + station.departures;
-      return station;
-    });
-
+    // Compute station traffic using the helper function
+    const stations = computeStationTraffic(allStations, trips);
     console.log("Stations with traffic data:", stations);
 
     // Create a square root scale for circle radius based on traffic
     const radiusScale = d3
       .scaleSqrt()
       .domain([0, d3.max(stations, (d) => d.totalTraffic)])
-      .range([0, 25]);
+      .range([0, 15]);
 
     // Append circles to the SVG for each station
     const circles = svg
       .selectAll("circle")
-      .data(stations)
+      .data(stations, (d) => d.short_name) // Use station short_name as the key
       .enter()
       .append("circle")
       .attr("r", (d) => radiusScale(d.totalTraffic)) // Radius based on traffic
@@ -168,6 +206,69 @@ map.on("load", async () => {
     map.on("zoom", updatePositions); // Update during zooming
     map.on("resize", updatePositions); // Update on window resize
     map.on("moveend", updatePositions); // Final adjustment after movement ends
+
+    // Select slider and display elements
+    const timeSlider = document.getElementById("time-slider");
+    const selectedTime = document.getElementById("time-display");
+    const anyTimeLabel = document.getElementById("any-time");
+
+    // Function to update time display and filter data
+    function updateTimeDisplay() {
+      let timeFilter = Number(timeSlider.value); // Get slider value
+
+      if (timeFilter === -1) {
+        selectedTime.textContent = ""; // Clear time display
+        anyTimeLabel.style.display = "block"; // Show "(any time)"
+      } else {
+        selectedTime.textContent = formatTime(timeFilter); // Display formatted time
+        anyTimeLabel.style.display = "none"; // Hide "(any time)"
+      }
+
+      // Call updateScatterPlot to reflect the changes on the map
+      updateScatterPlot(timeFilter);
+    }
+
+    // Function to update scatterplot based on time filter
+    function updateScatterPlot(timeFilter) {
+      // Get only the trips that match the selected time filter
+      const filteredTrips = filterTripsbyTime(trips, timeFilter);
+
+      // Recompute station traffic based on the filtered trips
+      const filteredStations = computeStationTraffic(
+        allStations,
+        filteredTrips
+      );
+
+      // Update the domain based on filtered data
+      const maxTraffic = d3.max(filteredStations, (d) => d.totalTraffic) || 1;
+      radiusScale.domain([0, maxTraffic]);
+
+      // Adjust radius scale range based on filtering
+      // Scale the range proportionally to the filtered data's max relative to original max
+      if (timeFilter === -1) {
+        radiusScale.range([0, 15]);
+      } else {
+        // Use a smaller range that scales with the actual filtered data
+        // This prevents huge circles when traffic is low (like at dawn)
+        const originalMax = d3.max(stations, (d) => d.totalTraffic);
+        const scaleFactor = Math.max(
+          0.3,
+          Math.min(1, maxTraffic / originalMax)
+        );
+        const maxRadius = 8 + scaleFactor * 12; // Range from 8 to 20 based on data
+        radiusScale.range([1, maxRadius]);
+      }
+
+      // Update the scatterplot by adjusting the radius of circles
+      circles
+        .data(filteredStations, (d) => d.short_name) // Ensure D3 tracks elements correctly
+        .join("circle")
+        .attr("r", (d) => radiusScale(d.totalTraffic)); // Update circle sizes
+    }
+
+    // Bind slider input event to update function
+    timeSlider.addEventListener("input", updateTimeDisplay);
+    updateTimeDisplay(); // Initial call to set up the display
   } catch (error) {
     console.error("Error loading JSON:", error); // Handle errors
   }

@@ -15,7 +15,17 @@
     <link rel="icon" href="assets/favicon.svg" type="image/svg+xml" />
   </head>
   <body>
-    <h1>🚴🏼‍♀️ Bikewatching</h1>
+    <header>
+      <h1>🚴🏼‍♀️ Bikewatching</h1>
+      <label>
+        Filter by time:
+        <input type="range" id="time-slider" min="-1" max="1440" value="-1" />
+        <span class="time-display-container">
+          <time id="time-display"></time>
+          <em id="any-time">(any time)</em>
+        </span>
+      </label>
+    </header>
     <div id="map">
       <svg></svg>
     </div>
