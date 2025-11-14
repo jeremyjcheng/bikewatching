@@ -15,9 +15,38 @@
     <link rel="icon" href="assets/favicon.svg" type="image/svg+xml" />
   </head>
   <body>
-    <h1>🚴🏼‍♀️ Bikewatching</h1>
+    <header>
+      <div class="header-left">
+        <img src="assets/favicon.svg" alt="Bikewatching logo" class="logo" />
+        <h1>Bikewatching</h1>
+      </div>
+      <div class="header-right">
+        <label>
+          Filter by time:
+          <input type="range" id="time-slider" min="-1" max="1440" value="-1" />
+        </label>
+        <time id="time-display"></time>
+        <em id="any-time">(any time)</em>
+      </div>
+    </header>
     <div id="map">
       <svg></svg>
     </div>
+    <div class="legend">
+      <span class="legend-label">LEGEND:</span>
+      <div class="legend-item">
+        <span class="legend-circle legend-circle-departures"></span>
+        <span class="legend-text">More departures</span>
+      </div>
+      <div class="legend-item">
+        <span class="legend-circle legend-circle-balanced"></span>
+        <span class="legend-text">Balanced</span>
+      </div>
+      <div class="legend-item">
+        <span class="legend-circle legend-circle-arrivals"></span>
+        <span class="legend-text">More arrivals</span>
+      </div>
+    </div>
+    <div class="legend-separator"></div>
   </body>
 </html>
