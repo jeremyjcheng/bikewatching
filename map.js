@@ -174,6 +174,9 @@ map.on("load", async () => {
       .domain([0, d3.max(stations, (d) => d.totalTraffic)])
       .range([0, 15]);
 
+    // Create a quantize scale for traffic flow (departure ratio)
+    const stationFlow = d3.scaleQuantize().domain([0, 1]).range([0, 0.5, 1]);
+
     // Append circles to the SVG for each station
     const circles = svg
       .selectAll("circle")
@@ -181,12 +184,14 @@ map.on("load", async () => {
       .enter()
       .append("circle")
       .attr("r", (d) => radiusScale(d.totalTraffic)) // Radius based on traffic
-      .attr("fill", "steelblue") // Circle fill color
       .attr("stroke", "white") // Circle border color
       .attr("stroke-width", 1) // Circle border thickness
       .attr("opacity", 0.8) // Circle opacity
       .attr("cx", (d) => getCoords(d).cx) // Set initial x-position
       .attr("cy", (d) => getCoords(d).cy) // Set initial y-position
+      .style("--departure-ratio", (d) =>
+        stationFlow(d.departures / (d.totalTraffic || 1))
+      )
       .on("mouseover", function (event, d) {
         console.log("Mouseover triggered", d); // Debug log
         tooltip
@@ -272,11 +277,14 @@ map.on("load", async () => {
         radiusScale.range([1, maxRadius]);
       }
 
-      // Update the scatterplot by adjusting the radius of circles
+      // Update the scatterplot by adjusting the radius and color of circles
       circles
         .data(filteredStations, (d) => d.short_name) // Ensure D3 tracks elements correctly
         .join("circle")
-        .attr("r", (d) => radiusScale(d.totalTraffic)); // Update circle sizes
+        .attr("r", (d) => radiusScale(d.totalTraffic)) // Update circle sizes
+        .style("--departure-ratio", (d) =>
+          stationFlow(d.departures / (d.totalTraffic || 1))
+        );
     }
 
     // Bind slider input event to update function
