@@ -116,6 +116,23 @@ map.on("load", async () => {
     },
   });
 
+  // Add Cambridge bike facilities
+  map.addSource("cambridge_route", {
+    type: "geojson",
+    data: "https://raw.githubusercontent.com/cambridgegis/cambridgegis_data/main/Recreation/Bike_Facilities/RECREATION_BikeFacilities.geojson",
+  });
+
+  map.addLayer({
+    id: "cambridge-bike-lanes",
+    type: "line",
+    source: "cambridge_route",
+    paint: {
+      "line-color": "#32D400", // Bright green line (same as Boston)
+      "line-width": 5, // Thicker
+      "line-opacity": 0.6, // Slightly transparent
+    },
+  });
+
   // Select the SVG element inside the map container
   const svg = d3.select("#map").select("svg");
 
