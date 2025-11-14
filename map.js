@@ -242,9 +242,11 @@ map.on("load", async () => {
 
       if (timeFilter === -1) {
         selectedTime.textContent = ""; // Clear time display
-        anyTimeLabel.style.display = "block"; // Show "(any time)"
+        selectedTime.style.display = "none"; // Hide time element when empty
+        anyTimeLabel.style.display = "inline"; // Show "(any time)"
       } else {
         selectedTime.textContent = formatTime(timeFilter); // Display formatted time
+        selectedTime.style.display = "inline"; // Show time element
         anyTimeLabel.style.display = "none"; // Hide "(any time)"
       }
 
