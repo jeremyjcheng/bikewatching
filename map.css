@@ -14,4 +14,86 @@ body {
   height: 100%; /* Adjust height to your desired size */
   box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1); /* Optional: subtle shadow for effect */
   border-radius: 8px; /* Optional: rounded corners */
+  position: relative; /* Needed for absolute positioning of SVG */
+}
+
+#map svg {
+  position: absolute;
+  z-index: 1;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+/* Shared color variables for circles */
+#map svg circle {
+  --color-departures: steelblue;
+  --color-arrivals: darkorange;
+  --color: color-mix(
+    in oklch,
+    var(--color-departures) calc(100% * var(--departure-ratio)),
+    var(--color-arrivals)
+  );
+}
+
+#map svg circle {
+  fill: var(--color);
+  fill-opacity: 60%;
+  stroke: white;
+  pointer-events: auto;
+  cursor: pointer;
+}
+
+.legend {
+  display: flex;
+  align-items: center;
+  gap: 1em;
+  padding: 0.75em 1.5em;
+  background-color: white;
+  border-radius: 4px;
+  margin-top: 1em;
+  margin-bottom: 0;
+}
+
+.legend-label {
+  color: #666;
+  font-weight: 500;
+  margin-right: 0.5em;
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5em;
+}
+
+.legend-circle {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+}
+
+.legend-circle-departures {
+  background-color: #4a90e2; /* Medium blue */
+}
+
+.legend-circle-balanced {
+  background-color: #9b59b6; /* Medium purple */
+}
+
+.legend-circle-arrivals {
+  background-color: #e67e22; /* Medium orange */
+}
+
+.legend-text {
+  color: black;
+  font-size: 0.9em;
+}
+
+.legend-separator {
+  height: 1px;
+  background-color: #ddd;
+  margin-top: 0;
+  margin-bottom: 1em;
 }
