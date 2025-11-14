@@ -17,6 +17,10 @@ const INPUT_BLUEBIKES_CSV_URL =
 const TRAFFIC_CSV_URL =
   "https://dsc106.com/labs/lab07/data/bluebikes-traffic-2024-03.csv";
 
+// Pre-bucket trips by minute for efficient filtering
+let departuresByMinute = Array.from({ length: 1440 }, () => []);
+let arrivalsByMinute = Array.from({ length: 1440 }, () => []);
+
 // Initialize the map
 const map = new mapboxgl.Map({
   container: "map",
@@ -45,18 +49,42 @@ function minutesSinceMidnight(date) {
   return date.getHours() * 60 + date.getMinutes();
 }
 
+// Efficiently filter trips by minute using pre-bucketed data
+function filterByMinute(tripsByMinute, minute) {
+  if (minute === -1) {
+    return tripsByMinute.flat(); // No filtering, return all trips
+  }
+
+  // Normalize both min and max minutes to the valid range [0, 1439]
+  let minMinute = (minute - 60 + 1440) % 1440;
+  let maxMinute = (minute + 60) % 1440;
+
+  // Handle time filtering across midnight
+  if (minMinute > maxMinute) {
+    let beforeMidnight = tripsByMinute.slice(minMinute);
+    let afterMidnight = tripsByMinute.slice(0, maxMinute);
+    return beforeMidnight.concat(afterMidnight).flat();
+  } else {
+    return tripsByMinute.slice(minMinute, maxMinute).flat();
+  }
+}
+
 // Function to compute station traffic
-function computeStationTraffic(stations, trips) {
-  // Compute departures
+function computeStationTraffic(stations, timeFilter = -1) {
+  // Retrieve filtered trips efficiently
+  const departureTrips = filterByMinute(departuresByMinute, timeFilter);
+  const arrivalTrips = filterByMinute(arrivalsByMinute, timeFilter);
+
+  // Compute departures from trips that started in the time window
   const departures = d3.rollup(
-    trips,
+    departureTrips,
     (v) => v.length,
     (d) => d.start_station_id
   );
 
-  // Compute arrivals
+  // Compute arrivals from trips that ended in the time window
   const arrivals = d3.rollup(
-    trips,
+    arrivalTrips,
     (v) => v.length,
     (d) => d.end_station_id
   );
@@ -69,23 +97,6 @@ function computeStationTraffic(stations, trips) {
     station.totalTraffic = station.arrivals + station.departures;
     return station;
   });
-}
-
-// Function to filter trips by time
-function filterTripsbyTime(trips, timeFilter) {
-  return timeFilter === -1
-    ? trips // If no filter is applied (-1), return all trips
-    : trips.filter((trip) => {
-        // Convert trip start and end times to minutes since midnight
-        const startedMinutes = minutesSinceMidnight(trip.started_at);
-        const endedMinutes = minutesSinceMidnight(trip.ended_at);
-
-        // Include trips that started or ended within 60 minutes of the selected time
-        return (
-          Math.abs(startedMinutes - timeFilter) <= 60 ||
-          Math.abs(endedMinutes - timeFilter) <= 60
-        );
-      });
 }
 
 map.on("load", async () => {
@@ -137,16 +148,24 @@ map.on("load", async () => {
     const allStations = jsonData.data.stations;
     console.log("Stations Array:", allStations);
 
-    // Fetch and parse traffic data with date parsing
+    // Fetch and parse traffic data with date parsing and bucketing
     const trips = await d3.csv(TRAFFIC_CSV_URL, (trip) => {
       trip.started_at = new Date(trip.started_at);
       trip.ended_at = new Date(trip.ended_at);
+
+      // Bucket trips by minute for efficient filtering
+      let startedMinutes = minutesSinceMidnight(trip.started_at);
+      departuresByMinute[startedMinutes].push(trip);
+
+      let endedMinutes = minutesSinceMidnight(trip.ended_at);
+      arrivalsByMinute[endedMinutes].push(trip);
+
       return trip;
     });
     console.log("Loaded Traffic Data:", trips);
 
-    // Compute station traffic using the helper function
-    const stations = computeStationTraffic(allStations, trips);
+    // Compute station traffic using the helper function (defaults to all trips)
+    const stations = computeStationTraffic(allStations);
     console.log("Stations with traffic data:", stations);
 
     // Create a square root scale for circle radius based on traffic
@@ -230,14 +249,8 @@ map.on("load", async () => {
 
     // Function to update scatterplot based on time filter
     function updateScatterPlot(timeFilter) {
-      // Get only the trips that match the selected time filter
-      const filteredTrips = filterTripsbyTime(trips, timeFilter);
-
-      // Recompute station traffic based on the filtered trips
-      const filteredStations = computeStationTraffic(
-        allStations,
-        filteredTrips
-      );
+      // Recompute station traffic based on the time filter (efficiently using pre-bucketed data)
+      const filteredStations = computeStationTraffic(allStations, timeFilter);
 
       // Update the domain based on filtered data
       const maxTraffic = d3.max(filteredStations, (d) => d.totalTraffic) || 1;
