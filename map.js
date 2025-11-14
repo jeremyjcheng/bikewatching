@@ -13,6 +13,10 @@ mapboxgl.accessToken =
 const INPUT_BLUEBIKES_CSV_URL =
   "https://dsc106.com/labs/lab07/data/bluebikes-stations.json";
 
+// Bluebikes traffic data URL
+const TRAFFIC_CSV_URL =
+  "https://dsc106.com/labs/lab07/data/bluebikes-traffic-2024-03.csv";
+
 // Initialize the map
 const map = new mapboxgl.Map({
   container: "map",
@@ -50,6 +54,23 @@ map.on("load", async () => {
   // Select the SVG element inside the map container
   const svg = d3.select("#map").select("svg");
 
+  // Create a tooltip div
+  const tooltip = d3
+    .select("body")
+    .append("div")
+    .attr("class", "tooltip")
+    .style("position", "absolute")
+    .style("visibility", "hidden")
+    .style("background-color", "rgba(255, 255, 255, 0.95)")
+    .style("border", "1px solid #ccc")
+    .style("border-radius", "4px")
+    .style("padding", "8px 12px")
+    .style("font-size", "12px")
+    .style("pointer-events", "none")
+    .style("z-index", "10000")
+    .style("box-shadow", "0 2px 4px rgba(0,0,0,0.2)")
+    .style("max-width", "200px");
+
   try {
     const jsonurl = INPUT_BLUEBIKES_CSV_URL;
 
@@ -62,17 +83,75 @@ map.on("load", async () => {
     let stations = jsonData.data.stations;
     console.log("Stations Array:", stations);
 
+    // Fetch and parse traffic data
+    const trips = await d3.csv(TRAFFIC_CSV_URL);
+    console.log("Loaded Traffic Data:", trips);
+
+    // Calculate departures and arrivals
+    const departures = d3.rollup(
+      trips,
+      (v) => v.length,
+      (d) => d.start_station_id
+    );
+
+    const arrivals = d3.rollup(
+      trips,
+      (v) => v.length,
+      (d) => d.end_station_id
+    );
+
+    // Add traffic properties to each station
+    stations = stations.map((station) => {
+      let id = station.short_name;
+      station.arrivals = arrivals.get(id) ?? 0;
+      station.departures = departures.get(id) ?? 0;
+      station.totalTraffic = station.arrivals + station.departures;
+      return station;
+    });
+
+    console.log("Stations with traffic data:", stations);
+
+    // Create a square root scale for circle radius based on traffic
+    const radiusScale = d3
+      .scaleSqrt()
+      .domain([0, d3.max(stations, (d) => d.totalTraffic)])
+      .range([0, 25]);
+
     // Append circles to the SVG for each station
     const circles = svg
       .selectAll("circle")
       .data(stations)
       .enter()
       .append("circle")
-      .attr("r", 5) // Radius of the circle
+      .attr("r", (d) => radiusScale(d.totalTraffic)) // Radius based on traffic
       .attr("fill", "steelblue") // Circle fill color
       .attr("stroke", "white") // Circle border color
       .attr("stroke-width", 1) // Circle border thickness
-      .attr("opacity", 0.8); // Circle opacity
+      .attr("opacity", 0.8) // Circle opacity
+      .attr("cx", (d) => getCoords(d).cx) // Set initial x-position
+      .attr("cy", (d) => getCoords(d).cy) // Set initial y-position
+      .on("mouseover", function (event, d) {
+        console.log("Mouseover triggered", d); // Debug log
+        tooltip
+          .style("visibility", "visible")
+          .style("display", "block")
+          .html(
+            `<strong>${d.name || "Station"}</strong><br/>${
+              d.totalTraffic
+            } trips (${d.departures} departures, ${d.arrivals} arrivals)`
+          );
+      })
+      .on("mousemove", function (event) {
+        tooltip
+          .style("top", event.pageY - 10 + "px")
+          .style("left", event.pageX + 10 + "px");
+      })
+      .on("mouseenter", function (event, d) {
+        console.log("Mouseenter triggered", d); // Debug log
+      })
+      .on("mouseout", function () {
+        tooltip.style("visibility", "hidden");
+      });
 
     // Function to update circle positions when the map moves/zooms
     function updatePositions() {
